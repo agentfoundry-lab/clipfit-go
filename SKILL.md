@@ -10,6 +10,15 @@ files can use a reviewable preview/apply transaction or an optional direct edit;
 new files use a create-only operation, and every write is constrained to the
 server's configured filesystem root.
 
+The server must be launched with an explicit, non-empty `--root`; it refuses to
+start without one. That root is the immutable maximum scope for the server's
+lifetime and cannot be widened by an agent tool call. A project root offers
+stronger isolation, while a home-directory root permits cross-project edits with
+root-relative paths. ClipFit can therefore provide structured writes while the
+agent's general shell remains sandboxed, without granting `danger-full-access` or
+broad shell write permissions. It does not bypass operating-system permissions;
+the ClipFit process still needs normal read/write access to the selected root.
+
 ## MCP workflow
 
 Read the closest applicable `AGENTS.md` before editing and follow its mode policy.

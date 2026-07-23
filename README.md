@@ -19,8 +19,24 @@ text protocol while adding server-enforced filesystem boundaries, exact-match
 validation, transactional preview/apply, optional direct editing, backups, and
 atomic writes.
 
+## Why ClipFit when native patch tools already work?
+
+ClipFit is not a sandbox bypass and is not intended to replace every native patch
+implementation. It is a least-privilege, policy-enforced write channel for cases
+where applying an edit to the wrong location would be costly. The agent's general
+shell can remain sandboxed: ClipFit exposes only structured file operations inside
+one explicit root, without requiring `danger-full-access` or broad shell write
+permissions. The ClipFit process still needs normal operating-system read/write
+permission for that configured root.
+
 ## Project highlights
 
+- **Least-privilege write channel:** the server exposes structured edit tools
+  inside one explicit, immutable root instead of granting the agent a general
+  shell with broad filesystem write access.
+- **Fail-closed contextual targeting:** an anchor must be unique; only then does
+  ClipFit search for the target after that anchor. Missing, repeated, misplaced,
+  or unexpectedly numerous matches are rejected before any write.
 - **Guarded when correctness matters:** safe mode computes the exact localized
   hunks before writing, lets an agent or human review them, and binds apply to
   the reviewed file content with a short-lived, single-use `preview_id`.
@@ -30,8 +46,8 @@ atomic writes.
 - **Policy-selectable:** teams can choose safe or direct mode globally, per
   repository, or per subtree with `AGENTS.md` instead of paying the same review
   cost for every change.
-- **Fail-closed matching:** exact counts and unique anchors reject missing or
-  ambiguous edits before they reach disk.
+- **Local by design:** the stdio server performs no network requests; structured
+  diagnostics stay on stderr and file contents remain local.
 - **Compact MCP responses:** preview returns hunks once; successful writes return
   concise receipts rather than echoing the patch again.
 
@@ -58,9 +74,25 @@ The server enforces a 256 KiB safety limit on each encoded JSON-RPC response.
 Split edits into smaller previews only after an explicit `response safety limit`
 error. A rejected preview never issues or retains a `preview_id` and never writes.
 
-The MCP server's `--root` is a mandatory security boundary. Relative paths are
-resolved from that root, while absolute paths, `..`, and symlinks are checked to
-prevent escapes.
+### Root scope and least privilege
+
+The MCP server requires an explicit, non-empty `--root` and refuses to start
+without one. The root is resolved once at startup, remains immutable for the
+server's lifetime, and cannot be widened by an agent tool call. Relative paths
+are resolved from that root, while absolute paths, `..`, and symlinks are checked
+to prevent escapes.
+
+Choose the narrowest root practical for the workflow:
+
+- A project root provides stronger isolation for a single repository.
+- A home-directory root supports convenient cross-project edits. Operations can
+  use root-relative paths such as `clipfit-go/README.md` and
+  `another-project/src/main.go` without restarting the server.
+
+A home-directory root deliberately grants ClipFit access to more user files,
+including sensitive dotfiles inside that directory. Use it only when that broader
+scope matches the user's trust model; ClipFit prevents accidental misapplication
+but does not make an intentionally targeted file harmless.
 
 Existing files support two workflows. Choose between them from the closest
 project policy and the edit's blast radius, reversibility, and available
@@ -101,6 +133,10 @@ go build -buildvcs=false -trimpath -o ~/.local/bin/clipfit .
 Start the stdio server:
 
 ```bash
+# Stronger isolation for one repository
+~/.local/bin/clipfit mcp --root /home/user/my-project
+
+# Convenient cross-project editing under one home directory
 ~/.local/bin/clipfit mcp --root /home/user
 ```
 
@@ -108,10 +144,12 @@ stdout is reserved for MCP JSON-RPC. Diagnostics go to stderr and never enter th
 
 ### MCP diagnostics and backpressure
 
-The server emits one JSON telemetry record per line on stderr. Records include
-request IDs, methods and tools, operation and input byte counts, phase durations,
-hunk statistics, response bytes, and encode/write/flush lifecycle events. A bounded
-queue ensures that a blocked stderr consumer can only drop diagnostics, not block JSON-RPC.
+The server emits one local JSON diagnostic record per line on stderr; ClipFit
+does not transmit these records over the network. Records include request IDs,
+methods and tools, operation and input byte counts, phase durations, hunk
+statistics, response bytes, and encode/write/flush lifecycle events. A bounded
+queue ensures that a blocked stderr consumer can only drop diagnostics, not block
+JSON-RPC.
 
 MCP responses are fully encoded and size-checked in memory before reaching stdout.
 If the client does not drain the response for 15 seconds, the server closes the
@@ -134,8 +172,10 @@ Restart Codex after saving. Confirm in MCP server settings or `/mcp` that
 `clipfit_preview`, `clipfit_apply`, `clipfit_edit`, `clipfit_create`, and
 `clipfit_rollback` are available.
 
-To narrow the writable scope, change the final `/home/user` argument to one
-repository, such as `/home/user/my-project`.
+The final `--root` argument is the user-chosen maximum scope. Keep `/home/user`
+for convenient cross-project edits, or change it to one repository such as
+`/home/user/my-project` for stronger isolation. Choose the narrowest scope that
+still supports the intended workflow.
 
 ### Install the optional Codex skill
 
@@ -156,7 +196,7 @@ verbatim `anchor` consisting of one unique line or block above the find text:
 
 ```json
 {
-  "path": "/home/user/project/main.go",
+  "path": "project/main.go",
   "operations": [
     {
       "type": "replace_block",

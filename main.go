@@ -37,6 +37,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -659,12 +660,28 @@ func runClean(asJSON bool) int {
 	return 0
 }
 
+func parseMCPArgs(args []string) (string, error) {
+	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	root := fs.String("root", "", "required filesystem root exposed by MCP")
+	if err := fs.Parse(args); err != nil {
+		return "", err
+	}
+	if fs.NArg() != 0 {
+		return "", fmt.Errorf("mcp accepts no positional arguments")
+	}
+	if strings.TrimSpace(*root) == "" {
+		return "", fmt.Errorf("--root is required")
+	}
+	return *root, nil
+}
+
 func usage() {
 	fmt.Fprintln(os.Stderr, "Usage:")
 	fmt.Fprintln(os.Stderr, "  clipfit apply    [--dry-run] [--json] <target-file> <spec-file>")
 	fmt.Fprintln(os.Stderr, "  clipfit rollback [--json] <target-file>")
 	fmt.Fprintln(os.Stderr, "  clipfit clean    [--json]")
-	fmt.Fprintln(os.Stderr, "  clipfit mcp      [--root <directory>]")
+	fmt.Fprintln(os.Stderr, "  clipfit mcp      --root <directory>")
 }
 
 func main() {
@@ -700,14 +717,17 @@ func main() {
 		fs.Parse(os.Args[2:])
 		os.Exit(runClean(*asJSON))
 	case "mcp":
-		fs := flag.NewFlagSet("mcp", flag.ExitOnError)
-		root := fs.String("root", ".", "filesystem root exposed by MCP")
-		fs.Parse(os.Args[2:])
-		if fs.NArg() != 0 {
+		root, err := parseMCPArgs(os.Args[2:])
+		if err != nil {
+			if err == flag.ErrHelp {
+				usage()
+				os.Exit(0)
+			}
+			fmt.Fprintf(os.Stderr, "clipfit mcp: %v\n", err)
 			usage()
 			os.Exit(2)
 		}
-		os.Exit(runMCP(*root))
+		os.Exit(runMCP(root))
 	default:
 		usage()
 		os.Exit(2)

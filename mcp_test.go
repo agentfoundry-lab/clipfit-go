@@ -3,12 +3,38 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestParseMCPArgsRequiresExplicitRoot(t *testing.T) {
+	for _, args := range [][]string{nil, {"--root", "   "}} {
+		if _, err := parseMCPArgs(args); err == nil || !strings.Contains(err.Error(), "--root is required") {
+			t.Fatalf("parseMCPArgs(%q) error = %v, want --root is required", args, err)
+		}
+	}
+
+	const wantRoot = "/home/user"
+	gotRoot, err := parseMCPArgs([]string{"--root", wantRoot})
+	if err != nil {
+		t.Fatalf("parse explicit root: %v", err)
+	}
+	if gotRoot != wantRoot {
+		t.Fatalf("root = %q, want %q", gotRoot, wantRoot)
+	}
+
+	if _, err := parseMCPArgs([]string{"--help"}); err != flag.ErrHelp {
+		t.Fatalf("help error = %v, want flag.ErrHelp", err)
+	}
+
+	if _, err := parseMCPArgs([]string{"--root", wantRoot, "unexpected"}); err == nil || !strings.Contains(err.Error(), "no positional arguments") {
+		t.Fatalf("unexpected positional argument error = %v", err)
+	}
+}
 
 func TestMCPCreateApplyAndRollback(t *testing.T) {
 	root := t.TempDir()

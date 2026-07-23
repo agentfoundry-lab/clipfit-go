@@ -6,6 +6,8 @@
 - Read the closest applicable project or subtree `AGENTS.md` before editing and
   follow its safe/direct mode policy.
 - Use `clipfit_create` for new files; it must not overwrite an existing path.
+- Treat the server's configured root as an immutable maximum scope. Use a path
+  inside it and never try to widen the root as an editing workaround.
 
 ## Select the existing-file workflow
 

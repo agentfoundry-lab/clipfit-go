@@ -16,6 +16,20 @@ match counts, stale-content checks, backup creation, and atomic writes. Guarded
 mode additionally exposes the server-computed hunks before writing and binds apply
 to the reviewed file content with a short-lived, single-use token.
 
+## Root and privilege model
+
+Start the MCP server with an explicit `--root`; it refuses to start without one.
+The resolved root is the immutable maximum scope for that server process, so an
+agent tool call cannot widen it. A project root provides stronger isolation. A
+home-directory root supports cross-project edits through root-relative paths but
+also exposes more user files and should be a deliberate trust decision.
+
+ClipFit supplies a narrow structured-write capability, so the agent's general
+shell can remain sandboxed without `danger-full-access` or broad filesystem write
+permission. This is least-privilege composition, not a sandbox bypass: the
+ClipFit process still requires normal operating-system access to its configured
+root.
+
 ## Safety layers
 
 Treat these as independent controls:
