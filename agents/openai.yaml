@@ -1,0 +1,4 @@
+interface:
+  display_name: "ClipFit"
+  short_description: "Policy-selectable guarded file editing for LLM agents"
+  default_prompt: "Use $clipfit to edit these files with the workflow allowed by the closest AGENTS.md."

@@ -1,0 +1,8 @@
+# Local build artifacts
+/clipfit-go
+/clipfit.next
+*.test
+coverage.out
+
+# Editor and migration backups
+*.orig
