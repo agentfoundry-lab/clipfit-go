@@ -178,6 +178,9 @@ nameB
   approval is required. Direct mode returns only a compact post-write receipt.
   Legacy CLI reports are complete, while MCP previews fail closed if the encoded
   response would exceed the safety limit.
+- Successful writes emit LF line endings. Pure CRLF and mixed-EOL inputs are
+  normalized to LF, and safe-mode previews include that normalization in their
+  hunks. The preview `after_sha256` hashes the exact bytes apply will write.
 - Backups live in the system temp directory and are short-lived; rollback is
   only guaranteed right after apply, not days later.
 

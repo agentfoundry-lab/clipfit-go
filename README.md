@@ -37,9 +37,9 @@ permission for that configured root.
 - **Fail-closed contextual targeting:** an anchor must be unique; only then does
   ClipFit search for the target after that anchor. Missing, repeated, misplaced,
   or unexpectedly numerous matches are rejected before any write.
-- **Guarded when correctness matters:** safe mode computes the exact localized
-  hunks before writing, lets an agent or human review them, and binds apply to
-  the reviewed file content with a short-lived, single-use `preview_id`.
+- **Guarded when correctness matters:** safe mode computes hunks for the exact
+  on-disk bytes it will write, lets an agent or human review them, and binds
+  apply to the reviewed file content with a short-lived, single-use `preview_id`.
 - **Fast when risk is low:** direct mode applies the same structured operations
   in one call while retaining match-count, root, symlink, race, backup, and
   atomic-write checks.
@@ -54,7 +54,7 @@ permission for that configured root.
 ## MCP tools
 
 - `clipfit_preview`: safe-mode planning; validates structured operations and
-  returns localized hunks plus a short-lived `preview_id` without writing.
+  returns exact output hunks plus a short-lived `preview_id` without writing.
 - `clipfit_apply`: safe-mode commit; accepts only a `preview_id`, applies the
   exact reviewed result, and returns a compact receipt without repeating hunks.
 - `clipfit_edit`: direct mode; validates and applies structured operations in one
@@ -64,11 +64,18 @@ permission for that configured root.
   overwrites an existing path or symlink and does not echo the complete file content.
 - `clipfit_rollback`: restores the most recent apply backup for one file.
 
-Distant edits remain separate localized hunks even when an earlier edit changes
-the total line count. A normal preview can contain multiple operations; do not
-split requests merely because stdio pipes commonly have a 64 KiB capacity. That
-capacity is not a JSON-RPC or MCP message-size limit. `content.text` contains only
-a summary, while the complete result appears once in `structuredContent`.
+Because ClipFit runs as a Linux text editor, every successful write emits LF line
+endings. Pure LF input stays LF; pure CRLF and mixed-EOL input are normalized to
+LF. The original UTF-8 BOM, when present, is preserved. Safe-mode hunks compare
+the original on-disk text with the exact final bytes, so line-ending normalization
+is visible in preview, and `after_sha256` hashes the same bytes that apply writes.
+
+For LF input, distant edits remain separate localized hunks even when an earlier
+edit changes the total line count. A normal preview can contain multiple
+operations; do not split requests merely because stdio pipes commonly have a 64
+KiB capacity. That capacity is not a JSON-RPC or MCP message-size limit.
+`content.text` contains only a summary, while the complete result appears once in
+`structuredContent`.
 
 The server enforces a 256 KiB safety limit on each encoded JSON-RPC response.
 Split edits into smaller previews only after an explicit `response safety limit`

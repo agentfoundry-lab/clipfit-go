@@ -42,6 +42,117 @@ func TestAnchoredPreviewSelectsTargetAfterUniqueAnchor(t *testing.T) {
 	assertFileContent(t, target, want)
 }
 
+func TestPreviewApplyNormalizesLineEndingsToLF(t *testing.T) {
+	tests := []struct {
+		name           string
+		original       string
+		want           string
+		crlfLines      []string
+		wantLocalHunks bool
+	}{
+		{
+			name:           "lf",
+			original:       "alpha\nvalue=old\nomega\n",
+			want:           "alpha\nvalue=new\nomega\n",
+			wantLocalHunks: true,
+		},
+		{
+			name:      "crlf",
+			original:  "alpha\r\nvalue=old\r\nomega\r\n",
+			want:      "alpha\nvalue=new\nomega\n",
+			crlfLines: []string{"alpha\r", "value=old\r", "omega\r"},
+		},
+		{
+			name:      "mixed",
+			original:  "alpha\r\nvalue=old\nomega\r\n",
+			want:      "alpha\nvalue=new\nomega\n",
+			crlfLines: []string{"alpha\r", "omega\r"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			target := filepath.Join(root, "line-endings.txt")
+			if err := os.WriteFile(target, []byte(tt.original), 0644); err != nil {
+				t.Fatal(err)
+			}
+			server := &mcpServer{root: root}
+
+			preview, err := server.previewEdits(mcpPreviewArgs{
+				Path: target,
+				Operations: []EditOperation{{
+					Type:    "replace",
+					Find:    "value=old",
+					Replace: "value=new",
+				}},
+			})
+			if err != nil {
+				t.Fatalf("preview: %v", err)
+			}
+			if preview.AfterSHA256 != hashBytes([]byte(tt.want)) {
+				t.Fatalf("preview after_sha256 = %s, want hash of %q", preview.AfterSHA256, tt.want)
+			}
+			assertFileContent(t, target, tt.original)
+
+			if tt.wantLocalHunks {
+				if len(preview.Hunks) != 1 || preview.Hunks[0].OldStart != 2 ||
+					!equalStrings(preview.Hunks[0].Removed, []string{"value=old"}) ||
+					!equalStrings(preview.Hunks[0].Added, []string{"value=new"}) {
+					t.Fatalf("LF preview should stay localized: %#v", preview.Hunks)
+				}
+			}
+			for _, line := range tt.crlfLines {
+				if !hunksContainRemovedLine(preview.Hunks, line) {
+					t.Fatalf("preview omitted CRLF normalization for %q: %#v", line, preview.Hunks)
+				}
+			}
+
+			applied, err := server.commitPreview(mcpCommitArgs{PreviewID: preview.PreviewID})
+			if err != nil {
+				t.Fatalf("apply: %v", err)
+			}
+			t.Cleanup(func() { _ = os.Remove(applied.BackupPath) })
+			if applied.AfterSHA256 != preview.AfterSHA256 {
+				t.Fatalf("apply after_sha256 = %s, preview after_sha256 = %s", applied.AfterSHA256, preview.AfterSHA256)
+			}
+			data, err := os.ReadFile(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != tt.want {
+				t.Fatalf("applied bytes = %q, want %q", data, tt.want)
+			}
+			if hashBytes(data) != preview.AfterSHA256 {
+				t.Fatalf("applied bytes do not match preview after_sha256")
+			}
+		})
+	}
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func hunksContainRemovedLine(hunks []Hunk, want string) bool {
+	for _, hunk := range hunks {
+		for _, line := range hunk.Removed {
+			if line == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestPreviewFailsClosedOnAmbiguousFind(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "ambiguous.txt")

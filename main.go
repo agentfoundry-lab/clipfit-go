@@ -73,7 +73,10 @@ type CmdStat struct {
 }
 
 // Match whitespace runs, including NBSP, to mirror the JavaScript implementation's \s collapsing behavior.
-var wsRun = regexp.MustCompile("[\t\n\f\r \u00A0]+")
+var (
+	wsRun   = regexp.MustCompile("[\t\n\f\r \u00A0]+")
+	utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+)
 
 func validateSingleLineReplace(find, replacement string) error {
 	if strings.ContainsAny(find, "\r\n") || strings.ContainsAny(replacement, "\r\n") {
@@ -395,11 +398,10 @@ func normalizeNBSPEdges(line string) string {
 // fileMeta records target-file properties that must be restored when writing.
 type fileMeta struct {
 	hadBOM bool
-	crlf   bool
 	mode   os.FileMode
 }
 
-// decodeTarget removes a BOM, normalizes newlines, and records the original file format.
+// decodeTarget removes a BOM and normalizes CRLF to LF for Linux-side editing.
 func decodeTarget(data []byte, path string) (string, fileMeta) {
 	var meta fileMeta
 	if info, e := os.Stat(path); e == nil {
@@ -407,28 +409,28 @@ func decodeTarget(data []byte, path string) (string, fileMeta) {
 	} else {
 		meta.mode = 0644
 	}
-	bom := []byte{0xEF, 0xBB, 0xBF}
-	if bytes.HasPrefix(data, bom) {
+	if bytes.HasPrefix(data, utf8BOM) {
 		meta.hadBOM = true
-		data = data[3:]
+		data = data[len(utf8BOM):]
 	}
-	s := string(data)
-	meta.crlf = strings.Contains(s, "\r\n")
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	return s, meta
+	return strings.ReplaceAll(string(data), "\r\n", "\n"), meta
 }
 
-// renderOutput restores the original BOM and newline style without changing trailing-newline presence.
+// renderOutput emits LF text while preserving the original UTF-8 BOM.
 func renderOutput(content string, meta fileMeta) []byte {
-	out := content
-	if meta.crlf {
-		out = strings.ReplaceAll(out, "\n", "\r\n")
-	}
-	b := []byte(out)
+	b := []byte(content)
 	if meta.hadBOM {
-		b = append([]byte{0xEF, 0xBB, 0xBF}, b...)
+		b = append(append([]byte(nil), utf8BOM...), b...)
 	}
 	return b
+}
+
+// textWithoutUTF8BOM exposes the exact on-disk text bytes used for preview hunks.
+func textWithoutUTF8BOM(data []byte) string {
+	if bytes.HasPrefix(data, utf8BOM) {
+		data = data[len(utf8BOM):]
+	}
+	return string(data)
 }
 
 // writeAtomic writes a temporary file in the target directory and renames it into place.
@@ -552,7 +554,8 @@ func runApply(target, spec string, dryRun, asJSON bool) int {
 	}
 
 	result, stats := applyCommands(content, commands)
-	hunks := computeChanges(content, result)
+	outputBytes := renderOutput(result, meta)
+	hunks := computeChanges(textWithoutUTF8BOM(rawData), textWithoutUTF8BOM(outputBytes))
 	missed := 0
 	for _, st := range stats {
 		if st.Matches == 0 {
@@ -572,7 +575,7 @@ func runApply(target, spec string, dryRun, asJSON bool) int {
 		} else {
 			printChangeReport(stats, hunks)
 			fmt.Fprintln(os.Stderr, "(dry-run: file and backup were not changed; complete preview is on stdout)")
-			os.Stdout.Write(renderOutput(result, meta))
+			os.Stdout.Write(outputBytes)
 		}
 		if missed > 0 {
 			return 1
@@ -588,7 +591,7 @@ func runApply(target, spec string, dryRun, asJSON bool) int {
 	}
 	res.BackupPath = bp
 
-	if err := writeAtomic(target, renderOutput(result, meta), meta.mode); err != nil {
+	if err := writeAtomic(target, outputBytes, meta.mode); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to write target file: %v\n", err)
 		return 2
 	}

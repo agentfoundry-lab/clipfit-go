@@ -51,7 +51,7 @@ func mcpToolDefinitions() []map[string]any {
 	return []map[string]any{
 		{
 			"name":        "clipfit_preview",
-			"description": "FIRST STEP for every existing-file edit. Validate structured operations against the current file and return localized hunks plus a short-lived preview_id. Does not write. Distant edits remain separate hunks, so normal multi-operation previews do not need arbitrary splitting. Fails closed if any find is missing or ambiguous; split into smaller previews only when the server returns an explicit response safety-limit error. Prefer replace_block with a unique verbatim anchor above find.",
+			"description": "FIRST STEP for every existing-file edit. Validate structured operations against the current file and return hunks for the exact LF-normalized output bytes plus a short-lived preview_id. Does not write. Distant edits in LF input remain separate hunks; CRLF or mixed-EOL normalization is included in the preview. Fails closed if any find is missing or ambiguous; split into smaller previews only when the server returns an explicit response safety-limit error. Prefer replace_block with a unique verbatim anchor above find.",
 			"inputSchema": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,

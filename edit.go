@@ -181,8 +181,9 @@ func (server *mcpServer) planEdits(args mcpPreviewArgs, telemetryEvent string) (
 		"duration_ms": durationMilliseconds(applyStarted),
 	})
 
+	after := renderOutput(updated, meta)
 	diffStarted := time.Now()
-	hunks := computeChanges(content, updated)
+	hunks := computeChanges(textWithoutUTF8BOM(rawData), textWithoutUTF8BOM(after))
 	diffFields := hunkTelemetryFields(hunks)
 	diffFields["phase"] = "compute_changes"
 	diffFields["duration_ms"] = durationMilliseconds(diffStarted)
@@ -193,7 +194,7 @@ func (server *mcpServer) planEdits(args mcpPreviewArgs, telemetryEvent string) (
 	return previewPlan{
 		Target:     target,
 		BeforeHash: hashBytes(rawData),
-		After:      renderOutput(updated, meta),
+		After:      after,
 		Mode:       meta.mode,
 		Operations: stats,
 		Hunks:      hunks,
