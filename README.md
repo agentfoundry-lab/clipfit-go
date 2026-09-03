@@ -134,8 +134,13 @@ for ready-to-use global, repository, and subtree examples.
 ```bash
 cd ~/clipfit-go
 go test ./...
-go build -buildvcs=false -trimpath -o ~/.local/bin/clipfit .
+go build -buildvcs=false -trimpath -o ./clipfit .
+./install.sh
 ```
+
+The install script copies an already compiled binary to
+`${CLIPFIT_INSTALL_DIR:-${GOBIN:-$HOME/.local/bin}}/clipfit`. Pass a different
+binary path as its first argument when needed.
 
 Start the stdio server:
 
