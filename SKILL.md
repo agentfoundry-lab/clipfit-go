@@ -1,6 +1,6 @@
 ---
 name: clipfit
-description: Modify or create local files through ClipFit MCP using policy-selected reviewable preview/apply transactions or direct edits, with exact match validation, unique anchors, compact write receipts, rollback backups, and a mandatory filesystem root. Use for reliable code edits, batch replacements, identifier swaps, new-file creation, or projects whose AGENTS.md defines risk-based editing rules; prefer MCP tools over the legacy CLI workflow.
+description: Modify or create local files through ClipFit MCP using policy-selected reviewable preview/apply transactions or direct edits, with exact block and suffix matching, unique anchors, compact write receipts, rollback backups, and a mandatory filesystem root. Use for reliable code edits, batch replacements, identifier swaps, new-file creation, or projects whose AGENTS.md defines risk-based editing rules; prefer MCP tools over the legacy CLI workflow.
 ---
 
 # ClipFit safe file editor
@@ -36,10 +36,13 @@ Choose one existing-file workflow:
 For either mode, prefer `replace_block` with a unique verbatim anchor above find.
 The anchor is optional; to edit the beginning of a file, omit it and use a unique
 multi-line `find` block with `expected_matches: 1`. Use `replace` only when both
-`find` and `replace` are single lines with no CR/LF; use `replace_block` for every
-multi-line edit. Direct mode skips preview review, but it keeps exact match
-validation, root and symlink checks, a same-call stale-content check, backup
-creation, and atomic write.
+`find` and `replace` are single lines with no CR/LF, and use `replace_block` for
+ordinary multi-line edits. Use the MCP-only `replace_suffix` when the exact end of
+the file—including trailing newlines—is part of the edit. It performs no dedent,
+allows multi-line or empty replacements, rejects `anchor`, and requires
+`expected_matches` to be `1` or omitted. Direct mode skips preview review, but it
+keeps exact match validation, root and symlink checks, a same-call stale-content
+check, backup creation, and atomic write.
 
 For a new file, call `clipfit_create`; it refuses to overwrite an existing file or
 symlink. If an applied edit is wrong, call `clipfit_rollback` immediately. Backups
@@ -170,6 +173,9 @@ nameB
   CR/LF on either side is rejected. `event` will also hit `prevent`,
   `eventListener`, `myEvent`. For multi-line edits use REPLACE_BLOCK; for
   identifier renames use SWAP_NAME or add surrounding context to disambiguate.
+- `replace_block` removes surrounding blank lines while normalizing the pasted
+  block, so it cannot target trailing newlines. Use MCP `replace_suffix` for exact
+  end-of-file whitespace changes.
 - The legacy CLI reports zero matches when a REPLACE_BLOCK find does not match.
   Always inspect the report and re-copy the exact source lines before retrying.
 - SWAP_NAME is whole-word and case-sensitive; it cannot target identifiers that

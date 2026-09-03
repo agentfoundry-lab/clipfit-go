@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	mcpServerVersion           = "0.3.1"
+	mcpServerVersion           = "0.4.0"
 	maxMCPResponseBytes        = 256 << 10
 	mcpResponseEnvelopeReserve = 1024
 	defaultMCPWriteTimeout     = 15 * time.Second
@@ -222,7 +222,7 @@ func (server *mcpServer) handle(request mcpRequest) error {
 				"name":    "clipfit",
 				"version": mcpServerVersion,
 			},
-			"instructions": "For existing files, ALWAYS call clipfit_preview with structured operations first, inspect every returned hunk, then call clipfit_apply with its preview_id. Prefer replace_block with a unique verbatim anchor above find. Preview fails closed on missing or ambiguous matches and apply refuses if the file changed. Use clipfit_create only for new files. All paths must stay within " + server.root + ".",
+			"instructions": "For existing files, ALWAYS call clipfit_preview with structured operations first, inspect every returned hunk, then call clipfit_apply with its preview_id. Prefer replace_block with a unique verbatim anchor above find. Use replace_suffix for exact end-of-file changes, including trailing blank lines. Preview fails closed on missing or ambiguous matches and apply refuses if the file changed. Use clipfit_create only for new files. All paths must stay within " + server.root + ".",
 		})
 	case "ping":
 		return server.sendResult(request.ID, map[string]any{})

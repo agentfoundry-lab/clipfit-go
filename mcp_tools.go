@@ -24,26 +24,26 @@ func mcpToolDefinitions() []map[string]any {
 		"properties": map[string]any{
 			"type": map[string]any{
 				"type":        "string",
-				"enum":        []string{"replace_block", "replace", "swap_name"},
-				"description": "Use replace_block for normal code edits, replace for exact literal text, and swap_name only for an atomic two-way identifier swap.",
+				"enum":        []string{"replace_block", "replace", "replace_suffix", "swap_name"},
+				"description": "Use replace_block for normal code edits, replace for exact single-line literal text, replace_suffix for an exact end-of-file replacement including newlines, and swap_name only for an atomic two-way identifier swap.",
 			},
 			"anchor": map[string]any{
 				"type":        "string",
-				"description": "Optional for replace_block only. Copy one unique verbatim line or contiguous block above find. The server searches for the first find after this anchor and rejects a missing or non-unique anchor.",
+				"description": "Optional for replace_block only. Copy one unique verbatim line or contiguous block above find. The server searches for the first find after this anchor and rejects a missing or non-unique anchor. Do not use with replace, replace_suffix, or swap_name.",
 			},
 			"find": map[string]any{
 				"type":        "string",
 				"minLength":   1,
-				"description": "Verbatim existing source text. For replace, this must be one line with no CR/LF. For replace_block, preserve the relative shape; indentation is normalized.",
+				"description": "Verbatim existing source text. For replace, this must be one line with no CR/LF. For replace_block, preserve the relative shape; indentation and surrounding blank lines are normalized. For replace_suffix, this is an exact LF-normalized suffix and whitespace is preserved.",
 			},
 			"replace": map[string]any{
 				"type":        "string",
-				"description": "Replacement text. Empty is allowed to delete the matched text. For replace, this must be one line with no CR/LF; use replace_block for multi-line edits.",
+				"description": "Replacement text. Empty is allowed to delete the matched text. For replace, this must be one line with no CR/LF; replace_block and replace_suffix allow multiple lines.",
 			},
 			"expected_matches": map[string]any{
 				"type":        "integer",
 				"minimum":     1,
-				"description": "Optional exact match count. Unanchored replace_block and replace default to exactly 1. Anchored replace_block always applies exactly 1. swap_name defaults to one-or-more.",
+				"description": "Optional exact match count. Unanchored replace_block and replace default to exactly 1. Anchored replace_block and replace_suffix always apply exactly 1. swap_name defaults to one-or-more.",
 			},
 		},
 	}

@@ -162,7 +162,7 @@ func TestServeMCPProtocolAndCreateTool(t *testing.T) {
 				"name": "clipfit_create",
 				"arguments": map[string]any{
 					"path":    "created-by-mcp.txt",
-					"content": "from protocol test\n",
+					"content": "from protocol test\n\n\n",
 				},
 			},
 		},
@@ -174,11 +174,18 @@ func TestServeMCPProtocolAndCreateTool(t *testing.T) {
 				"name": "clipfit_edit",
 				"arguments": map[string]any{
 					"path": "created-by-mcp.txt",
-					"operations": []map[string]any{{
-						"type":    "replace",
-						"find":    "from protocol test",
-						"replace": "edited directly",
-					}},
+					"operations": []map[string]any{
+						{
+							"type":    "replace",
+							"find":    "from protocol test",
+							"replace": "edited directly",
+						},
+						{
+							"type":    "replace_suffix",
+							"find":    "\n\n\n",
+							"replace": "\n",
+						},
+					},
 				},
 			},
 		},
@@ -253,6 +260,34 @@ func TestServeMCPProtocolAndCreateTool(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(backup) })
 	}
 	assertFileContent(t, filepath.Join(root, "created-by-mcp.txt"), "edited directly\n")
+}
+
+func TestMCPToolSchemaListsReplaceSuffix(t *testing.T) {
+	definitions := mcpToolDefinitions()
+	var previewTool map[string]any
+	for _, definition := range definitions {
+		if definition["name"] == "clipfit_preview" {
+			previewTool = definition
+			break
+		}
+	}
+	if previewTool == nil {
+		t.Fatal("clipfit_preview tool definition is missing")
+	}
+
+	inputSchema := previewTool["inputSchema"].(map[string]any)
+	properties := inputSchema["properties"].(map[string]any)
+	operations := properties["operations"].(map[string]any)
+	operationSchema := operations["items"].(map[string]any)
+	operationProperties := operationSchema["properties"].(map[string]any)
+	typeSchema := operationProperties["type"].(map[string]any)
+	types := typeSchema["enum"].([]string)
+	for _, operationType := range types {
+		if operationType == "replace_suffix" {
+			return
+		}
+	}
+	t.Fatalf("replace_suffix is missing from operation type enum: %v", types)
 }
 
 func assertFileContent(t *testing.T, path, want string) {

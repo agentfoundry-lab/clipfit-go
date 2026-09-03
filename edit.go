@@ -371,6 +371,22 @@ func applyStructuredOperations(original string, operations []EditOperation) (str
 				return "", nil, fmt.Errorf("operation #%d: literal find matched %d locations, expected %d", index+1, count, expected)
 			}
 
+		case "replace_suffix":
+			if strings.TrimSpace(operation.Anchor) != "" {
+				return "", nil, fmt.Errorf("operation #%d: anchor is not valid for replace_suffix", index+1)
+			}
+			if operation.ExpectedMatches != nil && *operation.ExpectedMatches != 1 {
+				return "", nil, fmt.Errorf("operation #%d: replace_suffix always applies one suffix; expected_matches must be 1 or omitted", index+1)
+			}
+			command.Type = "REPLACE_SUFFIX"
+			cleanFind := strings.ReplaceAll(operation.Find, "\r\n", "\n")
+			stat.ExpectedMatches = 1
+			if !strings.HasSuffix(current, cleanFind) {
+				return "", nil, fmt.Errorf("operation #%d: suffix find did not match the end of the file", index+1)
+			}
+			stat.CandidateMatches = 1
+			stat.AppliedMatches = 1
+
 		case "swap_name":
 			if strings.TrimSpace(operation.Anchor) != "" {
 				return "", nil, fmt.Errorf("operation #%d: anchor is not valid for swap_name", index+1)
@@ -400,7 +416,7 @@ func applyStructuredOperations(original string, operations []EditOperation) (str
 			}
 
 		default:
-			return "", nil, fmt.Errorf("operation #%d: unsupported type %q; use replace_block, replace, or swap_name", index+1, operation.Type)
+			return "", nil, fmt.Errorf("operation #%d: unsupported type %q; use replace_block, replace, replace_suffix, or swap_name", index+1, operation.Type)
 		}
 
 		updated, commandStats := applyCommands(current, []Command{command})

@@ -60,7 +60,7 @@ const (
 )
 
 type Command struct {
-	Type       string // "REPLACE", "REPLACE_BLOCK", or "SWAP_NAME"
+	Type       string // "REPLACE", "REPLACE_BLOCK", "REPLACE_SUFFIX", or "SWAP_NAME"
 	AnchorStr  string
 	FindStr    string
 	ReplaceStr string
@@ -335,6 +335,16 @@ func applyCommands(originalText string, commands []Command) (string, []CmdStat) 
 			cleanFind := strings.ReplaceAll(cmd.FindStr, "\u00A0", " ")
 			count := strings.Count(finalCode, cleanFind)
 			finalCode = strings.ReplaceAll(finalCode, cleanFind, cmd.ReplaceStr)
+			stats = append(stats, CmdStat{i, cmd.Type, count})
+
+		case "REPLACE_SUFFIX":
+			cleanFind := strings.ReplaceAll(cmd.FindStr, "\r\n", "\n")
+			cleanReplace := strings.ReplaceAll(cmd.ReplaceStr, "\r\n", "\n")
+			count := 0
+			if strings.HasSuffix(finalCode, cleanFind) {
+				finalCode = strings.TrimSuffix(finalCode, cleanFind) + cleanReplace
+				count = 1
+			}
 			stats = append(stats, CmdStat{i, cmd.Type, count})
 
 		case "SWAP_NAME":

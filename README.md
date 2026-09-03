@@ -215,13 +215,32 @@ verbatim `anchor` consisting of one unique line or block above the find text:
 }
 ```
 
+Use `replace_suffix` when the exact end of the file is part of the edit, such
+as reducing multiple trailing blank lines to one final newline:
+
+```json
+{
+  "path": "project/main.go",
+  "operations": [
+    {
+      "type": "replace_suffix",
+      "find": "\n\n\n",
+      "replace": "\n"
+    }
+  ]
+}
+```
+
 Rules:
 
 - For `replace_block`, the anchor must be unique; the first find after the anchor is selected.
 - `anchor` is optional. To edit the beginning of a file, omit it and use a
   sufficiently large unique `find` block with `expected_matches: 1`.
 - `replace` is strictly single-line: both `find` and `replace` must contain no
-  CR/LF. Use `replace_block` for every multi-line edit.
+  CR/LF. Use `replace_block` for ordinary multi-line edits.
+- `replace_suffix` requires `find` to match the exact LF-normalized end of the
+  file. It preserves whitespace, performs no dedent, allows multi-line or empty
+  replacements, rejects `anchor`, and requires `expected_matches` to be `1` or omitted.
 - Unanchored `replace_block` and `replace` default to exactly one match.
 - Set `expected_matches` only when multiple locations are intentionally changed.
 - `swap_name` performs one atomic two-way swap of whole-word identifiers.

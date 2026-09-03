@@ -130,6 +130,129 @@ func TestPreviewApplyNormalizesLineEndingsToLF(t *testing.T) {
 	}
 }
 
+func TestReplaceSuffixPreviewApply(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "suffix.txt")
+	original := "header\r\nbody\r\n\r\n\r\n"
+	want := "header\nbody\n"
+	if err := os.WriteFile(target, []byte(original), 0644); err != nil {
+		t.Fatal(err)
+	}
+	server := &mcpServer{root: root}
+
+	preview, err := server.previewEdits(mcpPreviewArgs{
+		Path: target,
+		Operations: []EditOperation{{
+			Type:    "replace_suffix",
+			Find:    "\r\n\r\n\r\n",
+			Replace: "\r\n",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("preview suffix replacement: %v", err)
+	}
+	if len(preview.Operations) != 1 {
+		t.Fatalf("operation stats count = %d, want 1", len(preview.Operations))
+	}
+	if got := preview.Operations[0]; got.Type != "replace_suffix" || got.CandidateMatches != 1 ||
+		got.AppliedMatches != 1 || got.ExpectedMatches != 1 {
+		t.Fatalf("unexpected suffix operation stats: %+v", got)
+	}
+	if len(preview.Hunks) == 0 || preview.AfterSHA256 != hashBytes([]byte(want)) {
+		t.Fatalf("preview does not describe exact suffix output: %+v", preview)
+	}
+	assertFileContent(t, target, original)
+
+	applied, err := server.commitPreview(mcpCommitArgs{PreviewID: preview.PreviewID})
+	if err != nil {
+		t.Fatalf("apply suffix replacement: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(applied.BackupPath) })
+	assertFileContent(t, target, want)
+}
+
+func TestReplaceSuffixAllowsEmptyReplacement(t *testing.T) {
+	updated, stats, err := applyStructuredOperations("alpha\n", []EditOperation{{
+		Type:    "replace_suffix",
+		Find:    "\n",
+		Replace: "",
+	}})
+	if err != nil {
+		t.Fatalf("replace suffix with empty content: %v", err)
+	}
+	if updated != "alpha" {
+		t.Fatalf("updated content = %q, want %q", updated, "alpha")
+	}
+	if len(stats) != 1 || stats[0].CandidateMatches != 1 || stats[0].AppliedMatches != 1 {
+		t.Fatalf("unexpected suffix operation stats: %+v", stats)
+	}
+}
+
+func TestReplaceSuffixFailsClosed(t *testing.T) {
+	two := 2
+	tests := []struct {
+		name      string
+		original  string
+		operation EditOperation
+		wantError string
+	}{
+		{
+			name:     "find exists before EOF only",
+			original: "alpha\n\nomega\n",
+			operation: EditOperation{
+				Type:    "replace_suffix",
+				Find:    "\n\n",
+				Replace: "\n",
+			},
+			wantError: "suffix find did not match the end of the file",
+		},
+		{
+			name:     "anchor is invalid",
+			original: "alpha\n",
+			operation: EditOperation{
+				Type:    "replace_suffix",
+				Anchor:  "alpha",
+				Find:    "\n",
+				Replace: "",
+			},
+			wantError: "anchor is not valid for replace_suffix",
+		},
+		{
+			name:     "expected matches must be one",
+			original: "alpha\n",
+			operation: EditOperation{
+				Type:            "replace_suffix",
+				Find:            "\n",
+				Replace:         "",
+				ExpectedMatches: &two,
+			},
+			wantError: "expected_matches must be 1 or omitted",
+		},
+		{
+			name:     "normalized replacement must change content",
+			original: "alpha\n",
+			operation: EditOperation{
+				Type:    "replace_suffix",
+				Find:    "\r\n",
+				Replace: "\r\n",
+			},
+			wantError: "matched text but produced no content change",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			updated, _, err := applyStructuredOperations(tt.original, []EditOperation{tt.operation})
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("error = %v, want %q", err, tt.wantError)
+			}
+			if updated != "" {
+				t.Fatalf("failed operation returned updated content %q", updated)
+			}
+		})
+	}
+}
+
 func equalStrings(left, right []string) bool {
 	if len(left) != len(right) {
 		return false
