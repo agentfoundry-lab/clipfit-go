@@ -99,6 +99,10 @@ func resolveMCPRoot(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	abs = filepath.Clean(abs)
+	if err := validatePlatformRootInput(abs); err != nil {
+		return "", err
+	}
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return "", fmt.Errorf("resolve root: %w", err)
@@ -110,7 +114,11 @@ func resolveMCPRoot(root string) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("root is not a directory: %s", resolved)
 	}
-	return filepath.Clean(resolved), nil
+	cleaned := filepath.Clean(resolved)
+	if err := validatePlatformRoot(cleaned); err != nil {
+		return "", err
+	}
+	return cleaned, nil
 }
 
 func serveMCP(in io.Reader, out io.Writer, resolvedRoot string) error {
@@ -463,6 +471,7 @@ func (server *mcpServer) create(args mcpCreateArgs) (Result, error) {
 		return Result{}, fmt.Errorf("parent path is not a directory: %s", parent)
 	}
 
+	output := renderOutput(args.Content, fileMeta{})
 	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return Result{}, fmt.Errorf("create file: %w", err)
@@ -474,7 +483,7 @@ func (server *mcpServer) create(args mcpCreateArgs) (Result, error) {
 			_ = os.Remove(target)
 		}
 	}()
-	if _, err := io.WriteString(file, args.Content); err != nil {
+	if _, err := file.Write(output); err != nil {
 		return Result{}, fmt.Errorf("write new file: %w", err)
 	}
 	if err := file.Sync(); err != nil {
@@ -492,7 +501,7 @@ func (server *mcpServer) create(args mcpCreateArgs) (Result, error) {
 		ChangeCount: 1,
 		Message: fmt.Sprintf(
 			"created new file (%d bytes); existing files are never overwritten by clipfit_create",
-			len(args.Content),
+			len(output),
 		),
 	}, nil
 }

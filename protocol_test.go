@@ -113,7 +113,7 @@ func TestMCPPreviewApplyProtocolRoundTrip(t *testing.T) {
 	if backup, _ := applyStructured["backup_path"].(string); backup != "" {
 		t.Cleanup(func() { _ = os.Remove(backup) })
 	}
-	assertFileContent(t, target, "anchor\nvalue=new\n")
+	assertFileContent(t, target, platformText("anchor\nvalue=new\n"))
 
 	_ = clientWriter.Close()
 	if err := <-done; err != nil {

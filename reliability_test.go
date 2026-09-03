@@ -46,7 +46,7 @@ func TestMCPPreviewDistantEditsCompletesWhileClientDrains(t *testing.T) {
 	beforeLines[199] = "field-b"
 	beforeLines[299] = "field-c"
 	beforeLines[377] = "far-marker"
-	before := strings.Join(beforeLines, "\n") + "\n"
+	before := platformText(strings.Join(beforeLines, "\n") + "\n")
 	if err := os.WriteFile(target, []byte(before), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestMCPPreviewDistantEditsCompletesWhileClientDrains(t *testing.T) {
 	} {
 		expected = strings.Replace(expected, replacement[0], replacement[1], 1)
 	}
-	assertFileContent(t, target, expected)
+	assertFileContent(t, target, platformText(expected))
 
 	_ = clientWriter.Close()
 	select {

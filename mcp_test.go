@@ -57,7 +57,7 @@ func TestMCPCreateApplyAndRollback(t *testing.T) {
 		t.Fatalf("unexpected create result: %+v", created)
 	}
 	target := filepath.Join(root, "nested", "example.txt")
-	assertFileContent(t, target, "hello world\n")
+	assertFileContent(t, target, platformText("hello world\n"))
 
 	if _, err := server.create(mcpCreateArgs{
 		Path:    "nested/example.txt",
@@ -65,7 +65,7 @@ func TestMCPCreateApplyAndRollback(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), "refusing to overwrite") {
 		t.Fatalf("expected overwrite refusal, got %v", err)
 	}
-	assertFileContent(t, target, "hello world\n")
+	assertFileContent(t, target, platformText("hello world\n"))
 
 	preview, err := server.previewEdits(mcpPreviewArgs{
 		Path: target,
@@ -81,7 +81,7 @@ func TestMCPCreateApplyAndRollback(t *testing.T) {
 	if !preview.OK || preview.ChangeCount != 1 || len(preview.Operations) != 1 || preview.Operations[0].AppliedMatches != 1 {
 		t.Fatalf("unexpected preview result: %+v", preview)
 	}
-	assertFileContent(t, target, "hello world\n")
+	assertFileContent(t, target, platformText("hello world\n"))
 
 	applied, err := server.commitPreview(mcpCommitArgs{PreviewID: preview.PreviewID})
 	if err != nil {
@@ -91,7 +91,7 @@ func TestMCPCreateApplyAndRollback(t *testing.T) {
 		t.Fatalf("unexpected apply result: %+v", applied)
 	}
 	t.Cleanup(func() { _ = os.Remove(applied.BackupPath) })
-	assertFileContent(t, target, "hello MCP\n")
+	assertFileContent(t, target, platformText("hello MCP\n"))
 
 	rolledBack, err := server.rollback(target)
 	if err != nil {
@@ -100,7 +100,7 @@ func TestMCPCreateApplyAndRollback(t *testing.T) {
 	if !rolledBack.OK {
 		t.Fatalf("unexpected rollback result: %+v", rolledBack)
 	}
-	assertFileContent(t, target, "hello world\n")
+	assertFileContent(t, target, platformText("hello world\n"))
 }
 
 func TestSecureMCPTargetRejectsEscapes(t *testing.T) {
@@ -259,7 +259,7 @@ func TestServeMCPProtocolAndCreateTool(t *testing.T) {
 	if backup, _ := directStructured["backup_path"].(string); backup != "" {
 		t.Cleanup(func() { _ = os.Remove(backup) })
 	}
-	assertFileContent(t, filepath.Join(root, "created-by-mcp.txt"), "edited directly\n")
+	assertFileContent(t, filepath.Join(root, "created-by-mcp.txt"), platformText("edited directly\n"))
 }
 
 func TestMCPToolSchemaListsReplaceSuffix(t *testing.T) {

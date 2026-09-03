@@ -64,18 +64,20 @@ permission for that configured root.
   overwrites an existing path or symlink and does not echo the complete file content.
 - `clipfit_rollback`: restores the most recent apply backup for one file.
 
-Because ClipFit runs as a Linux text editor, every successful write emits LF line
-endings. Pure LF input stays LF; pure CRLF and mixed-EOL input are normalized to
-LF. The original UTF-8 BOM, when present, is preserved. Safe-mode hunks compare
-the original on-disk text with the exact final bytes, so line-ending normalization
-is visible in preview, and `after_sha256` hashes the same bytes that apply writes.
+ClipFit uses platform line endings for edits and creates: non-Windows builds
+emit LF, while Windows builds emit CRLF. Pure and mixed-EOL input is normalized
+to the platform format. The original UTF-8 BOM, when present, is preserved.
+Safe-mode hunks compare the original on-disk text with the exact final bytes, so
+line-ending normalization is visible in preview, and `after_sha256` hashes the
+same bytes that apply writes. Rollback restores the original backup bytes
+verbatim.
 
-For LF input, distant edits remain separate localized hunks even when an earlier
-edit changes the total line count. A normal preview can contain multiple
-operations; do not split requests merely because stdio pipes commonly have a 64
-KiB capacity. That capacity is not a JSON-RPC or MCP message-size limit.
-`content.text` contains only a summary, while the complete result appears once in
-`structuredContent`.
+For input already using the platform EOL, distant edits remain separate localized
+hunks even when an earlier edit changes the total line count. A normal preview
+can contain multiple operations; do not split requests merely because stdio pipes
+commonly have a 64 KiB capacity. That capacity is not a JSON-RPC or MCP
+message-size limit. `content.text` contains only a summary, while the complete
+result appears once in `structuredContent`.
 
 The server enforces a 256 KiB safety limit on each encoded JSON-RPC response.
 Split edits into smaller previews only after an explicit `response safety limit`
@@ -88,6 +90,12 @@ without one. The root is resolved once at startup, remains immutable for the
 server's lifetime, and cannot be widened by an agent tool call. Relative paths
 are resolved from that root, while absolute paths, `..`, and symlinks are checked
 to prevent escapes.
+
+Platform builds also enforce local filesystem boundaries after resolving
+symlinks. Windows builds accept only local drive-letter roots and reject UNC,
+network, and WSL paths such as `\\wsl$`. Linux builds reject Windows drive
+mounts such as `/mnt/c` and reject 9p/DrvFs roots, including aliases that reach
+them through symlinks.
 
 Choose the narrowest root practical for the workflow:
 
@@ -131,18 +139,52 @@ for ready-to-use global, repository, and subtree examples.
 
 ## Build and test
 
+From WSL, run the tests and build native binaries for both Linux and Windows:
+
 ```bash
 cd ~/clipfit-go
 go test ./...
-go build -buildvcs=false -trimpath -o ./clipfit .
+./build.sh
+```
+
+By default, `build.sh` uses the current Go architecture. On an amd64 system it
+writes:
+
+```text
+dist/linux-amd64/clipfit
+dist/windows-amd64/clipfit.exe
+```
+
+Set `CLIPFIT_GOARCH` to build a different architecture, or
+`CLIPFIT_DIST_DIR` to change the output directory. Go automatically selects the
+Windows CRLF or non-Windows LF implementation from the target `GOOS`; no custom
+build tag is required.
+
+### Install the WSL binary
+
+```bash
 ./install.sh
 ```
 
-The install script copies an already compiled binary to
+The script installs the matching Linux artifact to
 `${CLIPFIT_INSTALL_DIR:-${GOBIN:-$HOME/.local/bin}}/clipfit`. Pass a different
-binary path as its first argument when needed.
+compiled Linux binary as its first argument when needed.
 
-Start the stdio server:
+### Install the Windows binary
+
+From Windows PowerShell in the repository:
+
+```powershell
+.\install-windows.cmd
+```
+
+The CMD entry point avoids UNC script-signing restrictions when the repository is
+inside WSL and delegates to `install.ps1`. It installs the matching Windows
+artifact to `%LOCALAPPDATA%\Programs\ClipFit\clipfit.exe`. Pass a different
+artifact as `-BinaryPath`, or override the destination with `-InstallDir` or
+`CLIPFIT_INSTALL_DIR`.
+
+Start the WSL stdio server:
 
 ```bash
 # Stronger isolation for one repository
@@ -167,27 +209,33 @@ MCP responses are fully encoded and size-checked in memory before reaching stdou
 If the client does not drain the response for 15 seconds, the server closes the
 transport and exits so Codex can restart it instead of hanging forever in write or flush.
 
-## Install in Windows Codex
+## Register both binaries in Windows Codex
 
-Add the following to the user-level Codex `~/.codex/config.toml`, normally
+Add both native servers to the user-level Codex `~/.codex/config.toml`, normally
 `C:\Users\<user>\.codex\config.toml` on Windows:
 
 ```toml
-[mcp_servers.clipfit]
+[mcp_servers.clipfit_wsl]
 command = "wsl.exe"
 args = ["-d", "Ubuntu-24.04", "--", "/home/user/.local/bin/clipfit", "mcp", "--root", "/home/user"]
 startup_timeout_sec = 15
 tool_timeout_sec = 60
+
+[mcp_servers.clipfit_windows]
+command = "C:\\Users\\user\\AppData\\Local\\Programs\\ClipFit\\clipfit.exe"
+args = ["mcp", "--root", "C:\\Users\\user"]
+startup_timeout_sec = 15
+tool_timeout_sec = 60
 ```
 
-Restart Codex after saving. Confirm in MCP server settings or `/mcp` that
-`clipfit_preview`, `clipfit_apply`, `clipfit_edit`, `clipfit_create`, and
-`clipfit_rollback` are available.
+Replace the distro, user names, and roots with local values. The server enforces
+the separation: the WSL build rejects Windows-mounted roots such as `/mnt/c`,
+while the Windows build rejects UNC and WSL roots such as `\\wsl$`.
 
-The final `--root` argument is the user-chosen maximum scope. Keep `/home/user`
-for convenient cross-project edits, or change it to one repository such as
-`/home/user/my-project` for stronger isolation. Choose the narrowest scope that
-still supports the intended workflow.
+Restart Codex after saving. Each server exposes `clipfit_preview`,
+`clipfit_apply`, `clipfit_edit`, `clipfit_create`, and `clipfit_rollback`.
+The final `--root` argument is the maximum scope for that server. Choose the
+narrowest root that still supports the intended workflow.
 
 ### Install the optional Codex skill
 

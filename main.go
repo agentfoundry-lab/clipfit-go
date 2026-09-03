@@ -411,7 +411,13 @@ type fileMeta struct {
 	mode   os.FileMode
 }
 
-// decodeTarget removes a BOM and normalizes CRLF to LF for Linux-side editing.
+// normalizeLineEndings keeps editing operations independent of the target OS.
+func normalizeLineEndings(content string) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	return strings.ReplaceAll(content, "\r", "\n")
+}
+
+// decodeTarget removes a BOM and normalizes text to the internal LF form.
 func decodeTarget(data []byte, path string) (string, fileMeta) {
 	var meta fileMeta
 	if info, e := os.Stat(path); e == nil {
@@ -423,11 +429,15 @@ func decodeTarget(data []byte, path string) (string, fileMeta) {
 		meta.hadBOM = true
 		data = data[len(utf8BOM):]
 	}
-	return strings.ReplaceAll(string(data), "\r\n", "\n"), meta
+	return normalizeLineEndings(string(data)), meta
 }
 
-// renderOutput emits LF text while preserving the original UTF-8 BOM.
+// renderOutput emits platform-native line endings while preserving the UTF-8 BOM.
 func renderOutput(content string, meta fileMeta) []byte {
+	content = normalizeLineEndings(content)
+	if platformLineEnding != "\n" {
+		content = strings.ReplaceAll(content, "\n", platformLineEnding)
+	}
 	b := []byte(content)
 	if meta.hadBOM {
 		b = append(append([]byte(nil), utf8BOM...), b...)

@@ -1,6 +1,7 @@
 # Local build artifacts
 /clipfit-go
 /clipfit.next
+/dist/
 *.test
 coverage.out
 

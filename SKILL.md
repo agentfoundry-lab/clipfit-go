@@ -12,12 +12,15 @@ server's configured filesystem root.
 
 The server must be launched with an explicit, non-empty `--root`; it refuses to
 start without one. That root is the immutable maximum scope for the server's
-lifetime and cannot be widened by an agent tool call. A project root offers
-stronger isolation, while a home-directory root permits cross-project edits with
-root-relative paths. ClipFit can therefore provide structured writes while the
-agent's general shell remains sandboxed, without granting `danger-full-access` or
-broad shell write permissions. It does not bypass operating-system permissions;
-the ClipFit process still needs normal read/write access to the selected root.
+lifetime and cannot be widened by an agent tool call. After resolving symlinks,
+Windows builds accept only local drive-letter roots and reject UNC, network, and
+WSL paths; Linux builds reject Windows drive mounts under `/mnt/<drive>` and
+9p/DrvFs roots. A project root offers stronger isolation, while a home-directory
+root permits cross-project edits with root-relative paths. ClipFit can therefore
+provide structured writes while the agent's general shell remains sandboxed,
+without granting `danger-full-access` or broad shell write permissions. It does
+not bypass operating-system permissions; the ClipFit process still needs normal
+read/write access to the selected root.
 
 ## MCP workflow
 
@@ -184,9 +187,11 @@ nameB
   approval is required. Direct mode returns only a compact post-write receipt.
   Legacy CLI reports are complete, while MCP previews fail closed if the encoded
   response would exceed the safety limit.
-- Successful writes emit LF line endings. Pure CRLF and mixed-EOL inputs are
-  normalized to LF, and safe-mode previews include that normalization in their
+- Successful edits and creates use platform line endings: LF on non-Windows
+  builds and CRLF on Windows builds. Pure and mixed-EOL inputs are normalized to
+  that platform format, and safe-mode previews include the normalization in their
   hunks. The preview `after_sha256` hashes the exact bytes apply will write.
+  Rollback restores the original backup bytes verbatim.
 - Backups live in the system temp directory and are short-lived; rollback is
   only guaranteed right after apply, not days later.
 

@@ -39,34 +39,29 @@ func TestAnchoredPreviewSelectsTargetAfterUniqueAnchor(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Remove(applied.BackupPath) })
 	want := "func first() {\n\tvalue := 1\n}\n\nfunc second() {\n\tvalue := 2\n\tvalue := 1\n}\n"
-	assertFileContent(t, target, want)
+	assertFileContent(t, target, platformText(want))
 }
 
-func TestPreviewApplyNormalizesLineEndingsToLF(t *testing.T) {
+func TestPreviewApplyUsesPlatformLineEndings(t *testing.T) {
 	tests := []struct {
-		name           string
-		original       string
-		want           string
-		crlfLines      []string
-		wantLocalHunks bool
+		name      string
+		original  string
+		canonical string
 	}{
 		{
-			name:           "lf",
-			original:       "alpha\nvalue=old\nomega\n",
-			want:           "alpha\nvalue=new\nomega\n",
-			wantLocalHunks: true,
+			name:      "lf",
+			original:  "alpha\nvalue=old\nomega\n",
+			canonical: "alpha\nvalue=new\nomega\n",
 		},
 		{
 			name:      "crlf",
 			original:  "alpha\r\nvalue=old\r\nomega\r\n",
-			want:      "alpha\nvalue=new\nomega\n",
-			crlfLines: []string{"alpha\r", "value=old\r", "omega\r"},
+			canonical: "alpha\nvalue=new\nomega\n",
 		},
 		{
 			name:      "mixed",
 			original:  "alpha\r\nvalue=old\nomega\r\n",
-			want:      "alpha\nvalue=new\nomega\n",
-			crlfLines: []string{"alpha\r", "omega\r"},
+			canonical: "alpha\nvalue=new\nomega\n",
 		},
 	}
 
@@ -90,21 +85,20 @@ func TestPreviewApplyNormalizesLineEndingsToLF(t *testing.T) {
 			if err != nil {
 				t.Fatalf("preview: %v", err)
 			}
-			if preview.AfterSHA256 != hashBytes([]byte(tt.want)) {
-				t.Fatalf("preview after_sha256 = %s, want hash of %q", preview.AfterSHA256, tt.want)
+			want := platformText(tt.canonical)
+			if preview.AfterSHA256 != hashBytes([]byte(want)) {
+				t.Fatalf("preview after_sha256 = %s, want hash of %q", preview.AfterSHA256, want)
 			}
 			assertFileContent(t, target, tt.original)
 
-			if tt.wantLocalHunks {
+			inputUsesPlatformEOL := (tt.name == "lf" && platformLineEnding == "\n") ||
+				(tt.name == "crlf" && platformLineEnding == "\r\n")
+			if inputUsesPlatformEOL {
+				lineSuffix := strings.TrimSuffix(platformLineEnding, "\n")
 				if len(preview.Hunks) != 1 || preview.Hunks[0].OldStart != 2 ||
-					!equalStrings(preview.Hunks[0].Removed, []string{"value=old"}) ||
-					!equalStrings(preview.Hunks[0].Added, []string{"value=new"}) {
-					t.Fatalf("LF preview should stay localized: %#v", preview.Hunks)
-				}
-			}
-			for _, line := range tt.crlfLines {
-				if !hunksContainRemovedLine(preview.Hunks, line) {
-					t.Fatalf("preview omitted CRLF normalization for %q: %#v", line, preview.Hunks)
+					!equalStrings(preview.Hunks[0].Removed, []string{"value=old" + lineSuffix}) ||
+					!equalStrings(preview.Hunks[0].Added, []string{"value=new" + lineSuffix}) {
+					t.Fatalf("%s preview should stay localized: %#v", platformLineEndingName, preview.Hunks)
 				}
 			}
 
@@ -120,8 +114,8 @@ func TestPreviewApplyNormalizesLineEndingsToLF(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(data) != tt.want {
-				t.Fatalf("applied bytes = %q, want %q", data, tt.want)
+			if string(data) != want {
+				t.Fatalf("applied bytes = %q, want %q", data, want)
 			}
 			if hashBytes(data) != preview.AfterSHA256 {
 				t.Fatalf("applied bytes do not match preview after_sha256")
@@ -134,7 +128,7 @@ func TestReplaceSuffixPreviewApply(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "suffix.txt")
 	original := "header\r\nbody\r\n\r\n\r\n"
-	want := "header\nbody\n"
+	want := platformText("header\nbody\n")
 	if err := os.WriteFile(target, []byte(original), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +462,7 @@ func TestDirectEditAppliesWithoutPreview(t *testing.T) {
 	if len(server.previews) != 0 {
 		t.Fatal("direct edit must not retain a preview plan")
 	}
-	assertFileContent(t, target, "gamma\nbeta\n")
+	assertFileContent(t, target, platformText("gamma\nbeta\n"))
 }
 
 func TestDirectEditFailsClosedOnAmbiguousFind(t *testing.T) {
